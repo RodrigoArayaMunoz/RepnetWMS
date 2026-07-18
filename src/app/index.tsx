@@ -1,51 +1,89 @@
 import { StatusBar } from 'expo-status-bar';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-const QR_MATRIX = [
-  '111010111',
-  '101000101',
-  '111011111',
-  '000100000',
-  '110111010',
-  '010001110',
-  '111010001',
-  '101011101',
-  '111001101',
-];
+const GRID_LINES = Array.from({ length: 9 }, (_, index) => index + 1);
 
-function QrMark({ compact = false }: { compact?: boolean }) {
+function TopBrand() {
   return (
-    <View style={[styles.qrGrid, compact && styles.qrGridCompact]}>
-      {QR_MATRIX.flatMap((row, rowIndex) =>
-        row.split('').map((cell, colIndex) => (
-          <View
-            key={`${rowIndex}-${colIndex}`}
-            style={[
-              styles.qrCell,
-              compact && styles.qrCellCompact,
-              cell === '1' && styles.qrCellFilled,
-            ]}
-          />
-        ))
-      )}
+    <View style={styles.topBrand}>
+      <Image
+        source={require('@/assets/images/logorepnet.png')}
+        style={styles.brandLogo}
+        resizeMode="contain"
+      />
     </View>
   );
 }
 
-function FooterIcon({ type }: { type: 'support' | 'language' }) {
-  if (type === 'support') {
-    return (
-      <View style={styles.supportIcon}>
-        <Text style={styles.supportIconText}>?</Text>
-      </View>
-    );
-  }
-
+function QuickAccessBadge() {
   return (
-    <View style={styles.languageIcon}>
-      <View style={styles.languageLineHorizontal} />
-      <View style={styles.languageLineVertical} />
+    <View style={styles.quickBadge}>
+      <View style={styles.badgePulse} />
+      <Text style={styles.quickBadgeText}>Acceso rápido con QR</Text>
+    </View>
+  );
+}
+
+function ScannerCorner({ position }: { position: 'topLeft' | 'topRight' | 'bottomLeft' | 'bottomRight' }) {
+  return <View style={[styles.scannerCorner, styles[position]]} />;
+}
+
+function ScannerFrame() {
+  return (
+    <View style={styles.scannerOuter}>
+      <View style={styles.scannerScreen}>
+        <View style={styles.scannerGrid}>
+          {GRID_LINES.map((line) => (
+            <View key={`v-${line}`} style={[styles.gridLineVertical, { left: `${line * 10}%` }]} />
+          ))}
+          {GRID_LINES.map((line) => (
+            <View key={`h-${line}`} style={[styles.gridLineHorizontal, { top: `${line * 10}%` }]} />
+          ))}
+        </View>
+
+        <ScannerCorner position="topLeft" />
+        <ScannerCorner position="topRight" />
+        <ScannerCorner position="bottomLeft" />
+        <ScannerCorner position="bottomRight" />
+
+        <View style={styles.focusTarget}>
+          <View style={styles.focusRow}>
+            <View style={styles.focusDash} />
+            <View style={styles.focusGap} />
+            <View style={styles.focusDash} />
+          </View>
+          <View style={styles.focusMiddle}>
+            <View style={styles.focusDashVertical} />
+            <View style={styles.focusDashVertical} />
+          </View>
+          <View style={styles.focusRow}>
+            <View style={styles.focusDash} />
+            <View style={styles.focusGap} />
+            <View style={styles.focusDash} />
+          </View>
+        </View>
+
+        <View style={styles.cameraStatus}>
+          <View style={styles.statusDot} />
+          <Text style={styles.cameraStatusText}>Cámara pausada</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function MercadoLibreBadge() {
+  return (
+    <View style={styles.integrationBadge}>
+      <Text style={styles.integrationLabel}>INTEGRADO CON</Text>
+      <View style={styles.integrationLogoWrap}>
+        <Image
+          source={require('@/assets/images/logomercadolibre.png')}
+          style={styles.integrationLogo}
+          resizeMode="contain"
+        />
+      </View>
     </View>
   );
 }
@@ -54,313 +92,338 @@ export default function LoginScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="dark" />
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        bounces={false}
-        showsVerticalScrollIndicator={false}>
-        <View style={styles.screen}>
+      <View style={styles.backgroundLayer} />
+
+      <View style={styles.screen}>
           <View style={styles.header}>
-            <Image
-              source={require('@/assets/images/logomercadolibre.png')}
-              style={styles.mercadoLibreLogo}
-              resizeMode="contain"
-            />
-            <View style={styles.logoDivider} />
-            <Image
-              source={require('@/assets/images/logorepnet.png')}
-              style={styles.repnetLogo}
-              resizeMode="contain"
-            />
+            <TopBrand />
           </View>
 
-          <Text style={styles.title}>WMS TERMINAL</Text>
-          <Text style={styles.subtitle}>Acceso para colaboradores del almacén</Text>
-
-          <View style={styles.loginPanel}>
-            <View style={styles.qrFrame}>
-              <QrMark />
-            </View>
-
-            <Pressable style={({ pressed }) => [styles.scanButton, pressed && styles.pressed]}>
-              <QrMark compact />
-              <View style={styles.scanButtonCopy}>
-                <Text style={styles.scanButtonTitle}>ESCANEAR CÓDIGO QR</Text>
-                <Text style={styles.scanButtonSubtitle}>PARA ACCESO INSTANTÁNEO</Text>
-              </View>
-            </Pressable>
-
-            <Text style={styles.helperText}>
-              Acerque su credencial de{'\n'}
-              colaborador al escáner para iniciar{'\n'}
-              sesión automáticamente.
+          <View style={styles.hero}>
+            <QuickAccessBadge />
+            <Text style={styles.title}>Escanea tu credencial</Text>
+            <Text style={styles.subtitle}>
+              Apunta la cámara al código QR de tu tarjeta{'\n'}de operador para ingresar.
             </Text>
+          </View>
 
-            <View style={styles.separator} />
+          <ScannerFrame />
 
-            <View style={styles.notice}>
-              <View style={styles.noticeIcon}>
-                <Text style={styles.noticeIconText}>i</Text>
-              </View>
-              <Text style={styles.noticeText}>
-                Este sistema está optimizado para{'\n'}
-                su uso en terminales de mano y{'\n'}
-                dispositivos industriales con{'\n'}
-                guantes.
-              </Text>
-            </View>
+          <View style={styles.actions}>
+            <Pressable style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}>
+              <Text style={styles.primaryButtonText}>Activar cámara</Text>
+            </Pressable>
           </View>
 
           <View style={styles.footer}>
-            <View style={styles.footerItem}>
-              <FooterIcon type="support" />
-              <Text style={styles.footerText}>Soporte Técnico</Text>
-            </View>
-            <View style={styles.footerItem}>
-              <FooterIcon type="language" />
-              <Text style={styles.footerText}>Idioma: Español</Text>
-            </View>
+            <MercadoLibreBadge />
           </View>
-        </View>
-      </ScrollView>
+      </View>
     </SafeAreaView>
   );
 }
 
 const colors = {
-  background: '#fbf8f8',
-  border: '#d4d8de',
-  navy: '#082b50',
-  text: '#102947',
-  textMuted: '#34445a',
-  yellow: '#fff15a',
+  blueDeep: '#0a46ba',
+  blue: '#2461c9',
+  blueSoft: '#5e8fd1',
+  blueGlass: 'rgba(255, 255, 255, 0.13)',
+  blueGlassStrong: 'rgba(255, 255, 255, 0.19)',
+  navy: '#071a43',
+  navyDeep: '#041236',
+  white: '#ffffff',
+  whiteMuted: '#c9dafd',
+  yellow: '#ffea28',
 };
 
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#d8eef8',
   },
-  scrollContent: {
-    flexGrow: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.background,
+  backgroundLayer: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: '#d8eef8',
+    experimental_backgroundImage:
+      'linear-gradient(180deg, #f8fbfd 0%, #e3f3fa 25%, #c9e8f6 56%, #b9e0f2 100%)',
   },
   screen: {
+    flex: 1,
     width: '100%',
-    maxWidth: 310,
-    minHeight: 690,
-    paddingHorizontal: 17,
-    paddingTop: 39,
-    paddingBottom: 21,
-    backgroundColor: colors.background,
+    maxWidth: 430,
+    alignSelf: 'center',
+    paddingHorizontal: 22,
+    paddingTop: 31,
+    paddingBottom: 0,
   },
   header: {
-    height: 40,
-    flexDirection: 'row',
+    width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  mercadoLibreLogo: {
-    width: 124,
-    height: 38,
+  topBrand: {
+    width: '100%',
+    height: 86,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  logoDivider: {
-    width: 1,
-    height: 29,
-    marginHorizontal: 14,
-    backgroundColor: '#d2d5da',
+  brandLogo: {
+    width: 240,
+    height: 82,
   },
-  repnetLogo: {
-    width: 76,
-    height: 31,
+  hero: {
+    alignItems: 'center',
+    marginTop: 0,
+  },
+  quickBadge: {
+    height: 25,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 15,
+    borderRadius: 13,
+    backgroundColor: 'rgba(255, 255, 255, 0.45)',
+  },
+  badgePulse: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.yellow,
+  },
+  quickBadgeText: {
+    color: '#124d82',
+    fontSize: 11,
+    fontWeight: '800',
+    lineHeight: 14,
   },
   title: {
-    marginTop: 17,
-    color: colors.navy,
-    fontSize: 13,
-    fontWeight: '500',
-    lineHeight: 17,
+    marginTop: 22,
+    color: '#0a3f70',
+    fontSize: 27,
+    fontWeight: '900',
+    lineHeight: 34,
     textAlign: 'center',
   },
   subtitle: {
-    marginTop: 5,
-    color: colors.text,
-    fontSize: 12,
-    lineHeight: 18,
+    marginTop: 9,
+    color: '#245b83',
+    fontSize: 15,
+    fontWeight: '500',
+    lineHeight: 22,
     textAlign: 'center',
   },
-  loginPanel: {
-    marginTop: 24,
-    minHeight: 496,
-    paddingTop: 43,
-    paddingHorizontal: 24,
-    paddingBottom: 25,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: '#fffefe',
-    boxShadow: '2px 3px 2px rgba(0, 0, 0, 0.13)',
-    elevation: 2,
-  },
-  qrFrame: {
-    width: 148,
-    height: 148,
+  scannerOuter: {
+    width: 322,
+    height: 322,
     alignSelf: 'center',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: '#365471',
-    backgroundColor: '#ffffff',
-    boxShadow: '2px 2px 2px rgba(0, 0, 0, 0.12)',
+    marginTop: 44,
+    borderRadius: 29,
+    backgroundColor: 'rgba(9, 35, 94, 0.23)',
   },
-  qrGrid: {
-    width: 66,
-    height: 66,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  qrGridCompact: {
-    width: 22,
-    height: 22,
-  },
-  qrCell: {
-    width: 7,
-    height: 7,
-    margin: 0.16,
-    backgroundColor: '#ffffff',
-  },
-  qrCellCompact: {
-    width: 2.4,
-    height: 2.4,
-    margin: 0.03,
-  },
-  qrCellFilled: {
+  scannerScreen: {
+    width: 286,
+    height: 286,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    borderRadius: 23,
+    borderWidth: 13,
+    borderColor: colors.navyDeep,
     backgroundColor: colors.navy,
+    boxShadow: '0px 22px 34px rgba(4, 16, 49, 0.20)',
   },
-  scanButton: {
+  scannerGrid: {
+    position: 'absolute',
+    inset: 13,
+    opacity: 0.85,
+  },
+  gridLineVertical: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    width: 1,
+    backgroundColor: 'rgba(120, 153, 213, 0.19)',
+  },
+  gridLineHorizontal: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: 1,
+    backgroundColor: 'rgba(120, 153, 213, 0.19)',
+  },
+  scannerCorner: {
+    position: 'absolute',
+    width: 42,
+    height: 42,
+    borderColor: colors.yellow,
+  },
+  topLeft: {
+    top: 0,
+    left: 0,
+    borderTopWidth: 3,
+    borderLeftWidth: 3,
+    borderTopLeftRadius: 18,
+  },
+  topRight: {
+    top: 0,
+    right: 0,
+    borderTopWidth: 3,
+    borderRightWidth: 3,
+    borderTopRightRadius: 18,
+  },
+  bottomLeft: {
+    bottom: 0,
+    left: 0,
+    borderBottomWidth: 3,
+    borderLeftWidth: 3,
+    borderBottomLeftRadius: 18,
+  },
+  bottomRight: {
+    right: 0,
+    bottom: 0,
+    borderRightWidth: 3,
+    borderBottomWidth: 3,
+    borderBottomRightRadius: 18,
+  },
+  focusTarget: {
+    width: 70,
+    height: 70,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 22,
+    backgroundColor: 'rgba(78, 110, 172, 0.55)',
+  },
+  focusRow: {
+    width: 28,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  focusGap: {
+    width: 8,
+  },
+  focusDash: {
+    width: 9,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.yellow,
+  },
+  focusMiddle: {
+    width: 28,
+    height: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginVertical: 3,
+  },
+  focusDashVertical: {
+    width: 4,
+    height: 12,
+    borderRadius: 2,
+    backgroundColor: colors.yellow,
+  },
+  cameraStatus: {
+    position: 'absolute',
+    bottom: 5,
+    height: 28,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.18)',
+    backgroundColor: 'rgba(7, 18, 54, 0.92)',
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#a0a8b8',
+  },
+  cameraStatusText: {
+    color: '#d9e3f7',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  actions: {
     width: '100%',
-    height: 56,
-    marginTop: 30,
+    marginTop: 35,
+    gap: 12,
+  },
+  primaryButton: {
+    height: 58,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 21,
+    backgroundColor: colors.yellow,
+    boxShadow: '0px 14px 28px rgba(255, 234, 40, 0.25)',
+  },
+  primaryButtonText: {
+    color: '#061332',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  secondaryButton: {
+    height: 53,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 13,
-    backgroundColor: colors.navy,
+    gap: 9,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.20)',
+  },
+  secondaryButtonIcon: {
+    color: colors.white,
+    fontSize: 18,
+    fontWeight: '800',
+    lineHeight: 20,
+  },
+  secondaryButtonText: {
+    color: colors.white,
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  footer: {
+    marginTop: 36,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    paddingBottom: 0,
+  },
+  integrationBadge: {
+    height: 30,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 11,
+    paddingLeft: 18,
+    paddingRight: 13,
+    borderTopLeftRadius: 19,
+    borderTopRightRadius: 19,
+    borderBottomLeftRadius: 19,
+    borderBottomRightRadius: 19,
+    borderWidth: 1,
+    borderBottomWidth: 0,
+    borderColor: 'rgba(20, 91, 141, 0.16)',
+    backgroundColor: 'rgba(255, 255, 255, 0.44)',
+  },
+  integrationLabel: {
+    color: '#225d8b',
+    fontSize: 10,
+    fontWeight: '900',
+  },
+  integrationLogoWrap: {
+    width: 88,
+    height: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 11,
+    backgroundColor: colors.white,
+  },
+  integrationLogo: {
+    width: 74,
+    height: 18,
   },
   pressed: {
     opacity: 0.78,
-  },
-  scanButtonCopy: {
-    gap: 2,
-  },
-  scanButtonTitle: {
-    color: '#ffffff',
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0,
-    lineHeight: 17,
-  },
-  scanButtonSubtitle: {
-    color: '#ffffff',
-    fontSize: 8,
-    fontWeight: '700',
-    letterSpacing: 0,
-    lineHeight: 12,
-  },
-  helperText: {
-    marginTop: 20,
-    color: colors.textMuted,
-    fontSize: 12,
-    lineHeight: 20,
-    textAlign: 'center',
-  },
-  separator: {
-    height: 1,
-    marginTop: 44,
-    marginBottom: 18,
-    backgroundColor: '#d9dfe6',
-  },
-  notice: {
-    flexDirection: 'row',
-    gap: 12,
-    alignItems: 'flex-start',
-  },
-  noticeIcon: {
-    width: 20,
-    height: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 2,
-    backgroundColor: colors.navy,
-  },
-  noticeIconText: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    overflow: 'hidden',
-    color: colors.navy,
-    backgroundColor: colors.yellow,
-    fontSize: 9,
-    fontWeight: '800',
-    lineHeight: 12,
-    textAlign: 'center',
-  },
-  noticeText: {
-    flex: 1,
-    color: colors.textMuted,
-    fontSize: 11,
-    lineHeight: 15,
-  },
-  footer: {
-    marginTop: 26,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 23,
-  },
-  footerItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  footerText: {
-    color: colors.text,
-    fontSize: 11,
-    lineHeight: 14,
-  },
-  supportIcon: {
-    width: 11,
-    height: 11,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderRadius: 5.5,
-    borderColor: colors.navy,
-  },
-  supportIconText: {
-    color: colors.navy,
-    fontSize: 8,
-    fontWeight: '700',
-    lineHeight: 10,
-  },
-  languageIcon: {
-    width: 12,
-    height: 12,
-    borderWidth: 1,
-    borderRadius: 6,
-    borderColor: colors.navy,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  languageLineHorizontal: {
-    position: 'absolute',
-    width: 10,
-    height: 1,
-    backgroundColor: colors.navy,
-  },
-  languageLineVertical: {
-    width: 1,
-    height: 10,
-    backgroundColor: colors.navy,
   },
 });
