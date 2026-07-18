@@ -33,7 +33,16 @@
           "image": "./assets/images/logorepnet.png",
           "imageWidth": 140
         }
-      ]
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Permite que Repnet WMS use la cámara para escanear credenciales QR.",
+          "recordAudioAndroid": false,
+          "barcodeScannerEnabled": true
+        }
+      ],
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,

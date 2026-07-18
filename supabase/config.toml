@@ -1,0 +1,5 @@
+[functions.qr-login]
+verify_jwt = false
+
+[functions.logout]
+verify_jwt = false

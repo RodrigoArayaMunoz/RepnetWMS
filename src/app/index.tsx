@@ -1,6 +1,16 @@
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import { StatusBar } from 'expo-status-bar';
+import { useEffect, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+import {
+  clearStoredSession,
+  getStoredSession,
+  loginWithQr,
+  logoutSession,
+  type OperatorSession,
+} from '@/lib/qr-auth';
 
 const GRID_LINES = Array.from({ length: 9 }, (_, index) => index + 1);
 
@@ -20,7 +30,7 @@ function QuickAccessBadge() {
   return (
     <View style={styles.quickBadge}>
       <View style={styles.badgePulse} />
-      <Text style={styles.quickBadgeText}>Acceso rápido con QR</Text>
+      <Text style={styles.quickBadgeText}>Acceso rapido con QR</Text>
     </View>
   );
 }
@@ -29,11 +39,27 @@ function ScannerCorner({ position }: { position: 'topLeft' | 'topRight' | 'botto
   return <View style={[styles.scannerCorner, styles[position]]} />;
 }
 
-function ScannerFrame() {
+type ScannerFrameProps = {
+  cameraActive: boolean;
+  isScanning: boolean;
+  statusText: string;
+  onBarcodeScanned: (value: string) => void;
+};
+
+function ScannerFrame({ cameraActive, isScanning, statusText, onBarcodeScanned }: ScannerFrameProps) {
   return (
     <View style={styles.scannerOuter}>
       <View style={styles.scannerScreen}>
-        <View style={styles.scannerGrid}>
+        {cameraActive && (
+          <CameraView
+            style={styles.cameraPreview}
+            facing="back"
+            barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+            onBarcodeScanned={isScanning ? undefined : ({ data }) => onBarcodeScanned(data)}
+          />
+        )}
+
+        <View style={[styles.scannerGrid, styles.nonInteractiveOverlay]}>
           {GRID_LINES.map((line) => (
             <View key={`v-${line}`} style={[styles.gridLineVertical, { left: `${line * 10}%` }]} />
           ))}
@@ -42,31 +68,35 @@ function ScannerFrame() {
           ))}
         </View>
 
-        <ScannerCorner position="topLeft" />
-        <ScannerCorner position="topRight" />
-        <ScannerCorner position="bottomLeft" />
-        <ScannerCorner position="bottomRight" />
+        <View style={[styles.scannerOverlay, styles.nonInteractiveOverlay]}>
+          <ScannerCorner position="topLeft" />
+          <ScannerCorner position="topRight" />
+          <ScannerCorner position="bottomLeft" />
+          <ScannerCorner position="bottomRight" />
 
-        <View style={styles.focusTarget}>
-          <View style={styles.focusRow}>
-            <View style={styles.focusDash} />
-            <View style={styles.focusGap} />
-            <View style={styles.focusDash} />
-          </View>
-          <View style={styles.focusMiddle}>
-            <View style={styles.focusDashVertical} />
-            <View style={styles.focusDashVertical} />
-          </View>
-          <View style={styles.focusRow}>
-            <View style={styles.focusDash} />
-            <View style={styles.focusGap} />
-            <View style={styles.focusDash} />
+          <View style={styles.focusTarget}>
+            <View style={styles.focusRow}>
+              <View style={styles.focusDash} />
+              <View style={styles.focusGap} />
+              <View style={styles.focusDash} />
+            </View>
+            <View style={styles.focusMiddle}>
+              <View style={styles.focusDashVertical} />
+              <View style={styles.focusDashVertical} />
+            </View>
+            <View style={styles.focusRow}>
+              <View style={styles.focusDash} />
+              <View style={styles.focusGap} />
+              <View style={styles.focusDash} />
+            </View>
           </View>
         </View>
 
         <View style={styles.cameraStatus}>
-          <View style={styles.statusDot} />
-          <Text style={styles.cameraStatusText}>Cámara pausada</Text>
+          <View style={[styles.statusDot, cameraActive && styles.statusDotActive]} />
+          <Text numberOfLines={1} style={styles.cameraStatusText}>
+            {statusText}
+          </Text>
         </View>
       </View>
     </View>
@@ -88,36 +118,167 @@ function MercadoLibreBadge() {
   );
 }
 
+function ActiveSessionScreen({ session, onLogout, isLoggingOut }: { session: OperatorSession; onLogout: () => void; isLoggingOut: boolean }) {
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar style="dark" />
+      <View style={styles.backgroundLayer} />
+      <View style={styles.screen}>
+        <View style={styles.header}>
+          <TopBrand />
+        </View>
+
+        <View style={styles.activeSessionContent}>
+          <View style={styles.sessionIndicator}>
+            <View style={styles.sessionIndicatorDot} />
+            <Text style={styles.sessionIndicatorText}>SESION ACTIVA</Text>
+          </View>
+          <Text style={styles.activeTitle}>Bienvenido, {session.operator.displayName}</Text>
+          <Text style={styles.activeSubtitle}>Codigo de colaborador: {session.operator.employeeCode}</Text>
+
+          <View style={styles.roleList}>
+            {session.operator.roles.map((role) => (
+              <View key={role} style={styles.roleBadge}>
+                <Text style={styles.roleBadgeText}>{role}</Text>
+              </View>
+            ))}
+          </View>
+
+          <Pressable
+            accessibilityRole="button"
+            disabled={isLoggingOut}
+            onPress={onLogout}
+            style={({ pressed }) => [styles.logoutButton, (pressed || isLoggingOut) && styles.pressed]}>
+            <Text style={styles.logoutButtonText}>{isLoggingOut ? 'Cerrando sesion...' : 'Cerrar sesion'}</Text>
+          </Pressable>
+        </View>
+
+        <View style={styles.footer}>
+          <MercadoLibreBadge />
+        </View>
+      </View>
+    </SafeAreaView>
+  );
+}
+
 export default function LoginScreen() {
+  const [permission, requestPermission] = useCameraPermissions();
+  const [cameraActive, setCameraActive] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
+  const [isLoadingSession, setIsLoadingSession] = useState(true);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [session, setSession] = useState<OperatorSession | null>(null);
+  const [statusText, setStatusText] = useState('Camara pausada');
+
+  useEffect(() => {
+    getStoredSession()
+      .then(setSession)
+      .finally(() => setIsLoadingSession(false));
+  }, []);
+
+  const activateCamera = async () => {
+    if (!permission) {
+      return;
+    }
+
+    let granted = permission.granted;
+    if (!granted) {
+      const nextPermission = await requestPermission();
+      granted = nextPermission.granted;
+    }
+
+    if (!granted) {
+      setStatusText('Permiso de camara requerido');
+      return;
+    }
+
+    setCameraActive(true);
+    setStatusText('Busca el codigo QR');
+  };
+
+  const handleBarcodeScanned = async (value: string) => {
+    if (isScanning) {
+      return;
+    }
+
+    setIsScanning(true);
+    setStatusText('Validando credencial...');
+
+    try {
+      const nextSession = await loginWithQr(value);
+      setCameraActive(false);
+      setSession(nextSession);
+    } catch (error) {
+      setStatusText(error instanceof Error ? error.message : 'No fue posible validar la credencial.');
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    if (!session) {
+      return;
+    }
+
+    setIsLoggingOut(true);
+    try {
+      await logoutSession(session.sessionToken);
+    } finally {
+      await clearStoredSession();
+      setSession(null);
+      setCameraActive(false);
+      setStatusText('Camara pausada');
+      setIsLoggingOut(false);
+    }
+  };
+
+  if (!isLoadingSession && session) {
+    return <ActiveSessionScreen session={session} onLogout={handleLogout} isLoggingOut={isLoggingOut} />;
+  }
+
+  const buttonText = cameraActive ? 'Camara activa' : 'Activar camara';
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="dark" />
       <View style={styles.backgroundLayer} />
 
       <View style={styles.screen}>
-          <View style={styles.header}>
-            <TopBrand />
-          </View>
+        <View style={styles.header}>
+          <TopBrand />
+        </View>
 
-          <View style={styles.hero}>
-            <QuickAccessBadge />
-            <Text style={styles.title}>Escanea tu credencial</Text>
-            <Text style={styles.subtitle}>
-              Apunta la cámara al código QR de tu tarjeta{'\n'}de operador para ingresar.
-            </Text>
-          </View>
+        <View style={styles.hero}>
+          <QuickAccessBadge />
+          <Text style={styles.title}>Escanea tu credencial</Text>
+          <Text style={styles.subtitle}>
+            Apunta la camara al codigo QR de tu tarjeta{`\n`}de operador para ingresar.
+          </Text>
+        </View>
 
-          <ScannerFrame />
+        <ScannerFrame
+          cameraActive={cameraActive}
+          isScanning={isScanning}
+          statusText={statusText}
+          onBarcodeScanned={handleBarcodeScanned}
+        />
 
-          <View style={styles.actions}>
-            <Pressable style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}>
-              <Text style={styles.primaryButtonText}>Activar cámara</Text>
-            </Pressable>
-          </View>
+        <View style={styles.actions}>
+          <Pressable
+            accessibilityRole="button"
+            disabled={cameraActive || isLoadingSession}
+            onPress={() => void activateCamera()}
+            style={({ pressed }) => [
+              styles.primaryButton,
+              (pressed || cameraActive || isLoadingSession) && styles.primaryButtonDisabled,
+            ]}>
+            <Text style={styles.primaryButtonText}>{buttonText}</Text>
+          </Pressable>
+        </View>
 
-          <View style={styles.footer}>
-            <MercadoLibreBadge />
-          </View>
+        <View style={styles.footer}>
+          <MercadoLibreBadge />
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -234,10 +395,21 @@ const styles = StyleSheet.create({
     backgroundColor: colors.navy,
     boxShadow: '0px 22px 34px rgba(4, 16, 49, 0.20)',
   },
+  cameraPreview: {
+    ...StyleSheet.absoluteFill,
+  },
   scannerGrid: {
     position: 'absolute',
     inset: 13,
     opacity: 0.85,
+  },
+  nonInteractiveOverlay: {
+    pointerEvents: 'none',
+  },
+  scannerOverlay: {
+    ...StyleSheet.absoluteFill,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   gridLineVertical: {
     position: 'absolute',
@@ -325,6 +497,7 @@ const styles = StyleSheet.create({
   cameraStatus: {
     position: 'absolute',
     bottom: 5,
+    maxWidth: 230,
     height: 28,
     flexDirection: 'row',
     alignItems: 'center',
@@ -341,7 +514,11 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     backgroundColor: '#a0a8b8',
   },
+  statusDotActive: {
+    backgroundColor: colors.yellow,
+  },
   cameraStatusText: {
+    flexShrink: 1,
     color: '#d9e3f7',
     fontSize: 11,
     fontWeight: '800',
@@ -349,7 +526,6 @@ const styles = StyleSheet.create({
   actions: {
     width: '100%',
     marginTop: 35,
-    gap: 12,
   },
   primaryButton: {
     height: 58,
@@ -359,29 +535,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.yellow,
     boxShadow: '0px 14px 28px rgba(255, 234, 40, 0.25)',
   },
+  primaryButtonDisabled: {
+    opacity: 0.75,
+  },
   primaryButtonText: {
     color: '#061332',
     fontSize: 16,
-    fontWeight: '800',
-  },
-  secondaryButton: {
-    height: 53,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 9,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.20)',
-  },
-  secondaryButtonIcon: {
-    color: colors.white,
-    fontSize: 18,
-    fontWeight: '800',
-    lineHeight: 20,
-  },
-  secondaryButtonText: {
-    color: colors.white,
-    fontSize: 15,
     fontWeight: '800',
   },
   footer: {
@@ -397,10 +556,7 @@ const styles = StyleSheet.create({
     gap: 11,
     paddingLeft: 18,
     paddingRight: 13,
-    borderTopLeftRadius: 19,
-    borderTopRightRadius: 19,
-    borderBottomLeftRadius: 19,
-    borderBottomRightRadius: 19,
+    borderRadius: 19,
     borderWidth: 1,
     borderBottomWidth: 0,
     borderColor: 'rgba(20, 91, 141, 0.16)',
@@ -422,6 +578,85 @@ const styles = StyleSheet.create({
   integrationLogo: {
     width: 74,
     height: 18,
+  },
+  activeSessionContent: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingBottom: 64,
+  },
+  sessionIndicator: {
+    height: 27,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 15,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.48)',
+  },
+  sessionIndicatorDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: '#2a9b68',
+  },
+  sessionIndicatorText: {
+    color: '#126347',
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  activeTitle: {
+    marginTop: 24,
+    paddingHorizontal: 16,
+    color: '#0a3f70',
+    fontSize: 26,
+    fontWeight: '900',
+    lineHeight: 33,
+    textAlign: 'center',
+  },
+  activeSubtitle: {
+    marginTop: 10,
+    color: '#245b83',
+    fontSize: 15,
+    fontWeight: '500',
+    lineHeight: 22,
+    textAlign: 'center',
+  },
+  roleList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 28,
+  },
+  roleBadge: {
+    minHeight: 31,
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+    borderRadius: 16,
+    backgroundColor: 'rgba(34, 97, 201, 0.14)',
+  },
+  roleBadgeText: {
+    color: '#124d82',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  logoutButton: {
+    width: '100%',
+    maxWidth: 322,
+    height: 54,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 38,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(10, 63, 112, 0.22)',
+    backgroundColor: 'rgba(255, 255, 255, 0.50)',
+  },
+  logoutButtonText: {
+    color: '#0a3f70',
+    fontSize: 16,
+    fontWeight: '800',
   },
   pressed: {
     opacity: 0.78,
