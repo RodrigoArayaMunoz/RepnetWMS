@@ -1,7 +1,8 @@
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Animated, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
@@ -13,6 +14,15 @@ import {
 } from '@/lib/qr-auth';
 
 const GRID_LINES = Array.from({ length: 9 }, (_, index) => index + 1);
+const PICKING_ITEMS = [
+  { bin: 'A-12-04', quantity: 'x2', sku: 'SKU-990-AX-1', name: 'Acople de acero industrial - 15mm', shipping: 'flex' },
+  { bin: 'B-05-11', quantity: 'x1', sku: 'SKU-122-BB-9', name: 'Kit de sello hidraulico heavy duty', shipping: 'other' },
+  { bin: 'C-22-01', quantity: 'x5', sku: 'SKU-441-ZZ-0', name: 'Tuerca de nylon M8 - Zincada', shipping: 'flex' },
+  { bin: 'D-01-09', quantity: 'x4', sku: 'SKU-882-MM-2', name: 'Empaque alta temperatura 200mm', shipping: 'other' },
+];
+
+type WorkspaceTab = 'picking' | 'returns' | 'receipts';
+type PickingFilter = 'all' | 'flex' | 'other';
 
 function TopBrand() {
   return (
@@ -118,45 +128,214 @@ function MercadoLibreBadge() {
   );
 }
 
-function ActiveSessionScreen({ session, onLogout, isLoggingOut }: { session: OperatorSession; onLogout: () => void; isLoggingOut: boolean }) {
+function SessionValidationOverlay({ opacity }: { opacity: Animated.Value }) {
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <Animated.View style={[styles.validationOverlay, { opacity }]}>
+      <View style={styles.validationCard}>
+        <Image
+          source={require('@/assets/images/logorepnet.png')}
+          style={styles.validationLogo}
+          resizeMode="contain"
+        />
+        <ActivityIndicator color={colors.blueDeep} size="large" style={styles.validationSpinner} />
+        <Text style={styles.validationTitle}>Validando credencial</Text>
+        <Text style={styles.validationSubtitle}>Estamos iniciando tu sesion.</Text>
+      </View>
+    </Animated.View>
+  );
+}
+
+function ActiveSessionScreen({ session, onLogout, isLoggingOut }: { session: OperatorSession; onLogout: () => void; isLoggingOut: boolean }) {
+  const [activeTab, setActiveTab] = useState<WorkspaceTab>('picking');
+  const [pickingFilter, setPickingFilter] = useState<PickingFilter>('all');
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [entrance] = useState(() => new Animated.Value(0));
+
+  useEffect(() => {
+    Animated.timing(entrance, {
+      toValue: 1,
+      duration: 360,
+      useNativeDriver: true,
+    }).start();
+  }, [entrance]);
+
+  const tabTitle =
+    activeTab === 'picking'
+      ? 'Items pendientes'
+      : activeTab === 'returns'
+        ? 'Devoluciones/Garantías'
+        : 'Ingresos';
+  const visiblePickingItems = PICKING_ITEMS.filter(
+    (item) => pickingFilter === 'all' || item.shipping === pickingFilter
+  );
+
+  return (
+    <SafeAreaView style={styles.workspaceSafeArea}>
       <StatusBar style="dark" />
-      <View style={styles.backgroundLayer} />
-      <View style={styles.screen}>
-        <View style={styles.header}>
-          <TopBrand />
-        </View>
-
-        <View style={styles.activeSessionContent}>
-          <View style={styles.sessionIndicator}>
-            <View style={styles.sessionIndicatorDot} />
-            <Text style={styles.sessionIndicatorText}>SESION ACTIVA</Text>
-          </View>
-          <Text style={styles.activeTitle}>Bienvenido, {session.operator.displayName}</Text>
-          <Text style={styles.activeSubtitle}>Codigo de colaborador: {session.operator.employeeCode}</Text>
-
-          <View style={styles.roleList}>
-            {session.operator.roles.map((role) => (
-              <View key={role} style={styles.roleBadge}>
-                <Text style={styles.roleBadgeText}>{role}</Text>
-              </View>
-            ))}
+      <View style={styles.workspaceBackground} />
+      <Animated.View
+        style={[
+          styles.workspaceScreen,
+          {
+            opacity: entrance,
+            transform: [
+              {
+                translateY: entrance.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [18, 0],
+                }),
+              },
+            ],
+          },
+        ]}>
+        <View style={styles.workspaceHeader}>
+          <View style={styles.workspaceIdentity}>
+            <View style={styles.workspaceAvatar}>
+              <Text style={styles.workspaceAvatarText}>RN</Text>
+            </View>
+            <View>
+              <Text style={styles.workspaceTitle}>REPNET WMS</Text>
+              <Text numberOfLines={1} style={styles.workspaceGreeting}>
+                Hola, {session.operator.displayName}
+              </Text>
+            </View>
           </View>
 
           <Pressable
+            accessibilityLabel="Opciones de sesion"
             accessibilityRole="button"
-            disabled={isLoggingOut}
-            onPress={onLogout}
-            style={({ pressed }) => [styles.logoutButton, (pressed || isLoggingOut) && styles.pressed]}>
-            <Text style={styles.logoutButtonText}>{isLoggingOut ? 'Cerrando sesion...' : 'Cerrar sesion'}</Text>
+            onPress={() => setIsMenuOpen((isOpen) => !isOpen)}
+            style={({ pressed }) => [styles.settingsButton, pressed && styles.pressed]}>
+            <MaterialCommunityIcons color="#245b83" name="cog-outline" size={25} />
           </Pressable>
+
+          {isMenuOpen && (
+            <View style={styles.sessionMenu}>
+              <Text style={styles.sessionMenuLabel}>Sesion activa</Text>
+              <Text numberOfLines={1} style={styles.sessionMenuName}>
+                {session.operator.displayName}
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                disabled={isLoggingOut}
+                onPress={onLogout}
+                style={({ pressed }) => [styles.sessionMenuLogout, (pressed || isLoggingOut) && styles.pressed]}>
+                <MaterialCommunityIcons color="#0a3f70" name="logout" size={17} />
+                <Text style={styles.sessionMenuLogoutText}>{isLoggingOut ? 'Cerrando...' : 'Cerrar sesion'}</Text>
+              </Pressable>
+            </View>
+          )}
         </View>
 
-        <View style={styles.footer}>
-          <MercadoLibreBadge />
+        <View style={styles.workspaceContent}>
+          <Pressable accessibilityRole="button" style={({ pressed }) => [styles.scanCodeButton, pressed && styles.pressed]}>
+            <MaterialCommunityIcons color={colors.white} name="barcode-scan" size={27} />
+            <Text style={styles.scanCodeButtonText}>ESCANEAR CODIGO</Text>
+          </Pressable>
+
+          {activeTab === 'picking' && (
+            <View accessibilityRole="tablist" style={styles.pickingFilters}>
+              <Pressable
+                accessibilityRole="tab"
+                accessibilityState={{ selected: pickingFilter === 'all' }}
+                onPress={() => setPickingFilter('all')}
+                style={({ pressed }) => [styles.pickingFilter, pickingFilter === 'all' && styles.pickingFilterActive, pressed && styles.pressed]}>
+                <Text style={[styles.pickingFilterText, pickingFilter === 'all' && styles.pickingFilterTextActive]}>Flex</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="tab"
+                accessibilityState={{ selected: pickingFilter === 'flex' }}
+                onPress={() => setPickingFilter('flex')}
+                style={({ pressed }) => [styles.pickingFilter, pickingFilter === 'flex' && styles.pickingFilterActive, pressed && styles.pressed]}>
+                <Text style={[styles.pickingFilterText, pickingFilter === 'flex' && styles.pickingFilterTextActive]}>Ventas No Flex</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="tab"
+                accessibilityState={{ selected: pickingFilter === 'other' }}
+                onPress={() => setPickingFilter('other')}
+                style={({ pressed }) => [styles.pickingFilter, pickingFilter === 'other' && styles.pickingFilterActive, pressed && styles.pressed]}>
+                <Text style={[styles.pickingFilterText, pickingFilter === 'other' && styles.pickingFilterTextActive]}>Todos</Text>
+              </Pressable>
+            </View>
+          )}
+
+          <View style={styles.progressCard}>
+            <View style={styles.progressTopRow}>
+              <View>
+                <Text style={styles.progressLabel}>PROGRESO DE PICKING</Text>
+                <Text style={styles.progressOrder}>Orden #WP-8829</Text>
+              </View>
+              <View style={styles.progressCount}>
+                <Text style={styles.progressCountNumber}>08 / 12</Text>
+                <Text style={styles.progressCountLabel}>ITEMS</Text>
+              </View>
+            </View>
+            <View style={styles.progressTrack}>
+              <View style={styles.progressValue} />
+            </View>
+          </View>
+
+          <View style={styles.workspaceSectionHeader}>
+            <Text style={styles.workspaceSectionTitle}>{tabTitle.toUpperCase()}</Text>
+            <MaterialCommunityIcons color="#245b83" name="tune-variant" size={20} />
+          </View>
+
+          {activeTab === 'picking' ? (
+            <View style={styles.pendingItemsList}>
+              {visiblePickingItems.map((item) => (
+                <Pressable key={item.bin} accessibilityRole="button" style={({ pressed }) => [styles.pendingItem, pressed && styles.pressed]}>
+                  <View style={styles.pendingItemAccent} />
+                  <View style={styles.pendingItemContent}>
+                    <View style={styles.pendingItemTopRow}>
+                      <Text style={styles.binBadge}>BIN: {item.bin}</Text>
+                      <Text style={styles.itemQuantity}>{item.quantity}</Text>
+                    </View>
+                    <Text style={styles.itemSku}>{item.sku}</Text>
+                    <Text numberOfLines={1} style={styles.itemName}>
+                      {item.name}
+                    </Text>
+                  </View>
+                  <MaterialCommunityIcons color="#53677c" name="chevron-right" size={22} />
+                </Pressable>
+              ))}
+              <Text style={styles.priorityEnd}>Fin de la lista de prioridad</Text>
+            </View>
+          ) : (
+            <View style={styles.emptyWorkspace}>
+              <MaterialCommunityIcons color="#2461c9" name={activeTab === 'returns' ? 'undo-variant' : 'tray-arrow-down'} size={36} />
+              <Text style={styles.emptyWorkspaceTitle}>Sin tareas pendientes</Text>
+              <Text style={styles.emptyWorkspaceText}>No hay movimientos asignados para este momento.</Text>
+            </View>
+          )}
         </View>
-      </View>
+
+        <View style={styles.workspaceTabs}>
+          <Pressable
+            accessibilityRole="tab"
+            accessibilityState={{ selected: activeTab === 'picking' }}
+            onPress={() => setActiveTab('picking')}
+            style={({ pressed }) => [styles.workspaceTab, activeTab === 'picking' && styles.workspaceTabActive, pressed && styles.pressed]}>
+            <MaterialCommunityIcons color={activeTab === 'picking' ? colors.navyDeep : '#d9e3f7'} name="package-variant-closed" size={22} />
+            <Text style={[styles.workspaceTabText, activeTab === 'picking' && styles.workspaceTabTextActive]}>PICKING</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="tab"
+            accessibilityState={{ selected: activeTab === 'returns' }}
+            onPress={() => setActiveTab('returns')}
+            style={({ pressed }) => [styles.workspaceTab, activeTab === 'returns' && styles.workspaceTabActive, pressed && styles.pressed]}>
+            <MaterialCommunityIcons color={activeTab === 'returns' ? colors.navyDeep : '#d9e3f7'} name="undo-variant" size={22} />
+            <Text style={[styles.workspaceTabText, activeTab === 'returns' && styles.workspaceTabTextActive]}>DEVOLUCIONES/{'\n'}GARANTÍAS</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="tab"
+            accessibilityState={{ selected: activeTab === 'receipts' }}
+            onPress={() => setActiveTab('receipts')}
+            style={({ pressed }) => [styles.workspaceTab, activeTab === 'receipts' && styles.workspaceTabActive, pressed && styles.pressed]}>
+            <MaterialCommunityIcons color={activeTab === 'receipts' ? colors.navyDeep : '#d9e3f7'} name="tray-arrow-down" size={22} />
+            <Text style={[styles.workspaceTabText, activeTab === 'receipts' && styles.workspaceTabTextActive]}>INGRESOS</Text>
+          </Pressable>
+        </View>
+      </Animated.View>
     </SafeAreaView>
   );
 }
@@ -169,6 +348,8 @@ export default function LoginScreen() {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [session, setSession] = useState<OperatorSession | null>(null);
   const [statusText, setStatusText] = useState('Camara pausada');
+  const [isValidating, setIsValidating] = useState(false);
+  const [validationOpacity] = useState(() => new Animated.Value(0));
 
   useEffect(() => {
     getStoredSession()
@@ -202,15 +383,37 @@ export default function LoginScreen() {
     }
 
     setIsScanning(true);
+    setIsValidating(true);
     setStatusText('Validando credencial...');
+    validationOpacity.setValue(0);
+    Animated.timing(validationOpacity, {
+      toValue: 1,
+      duration: 160,
+      useNativeDriver: true,
+    }).start();
 
     try {
       const nextSession = await loginWithQr(value);
+      await new Promise<void>((resolve) => {
+        Animated.timing(validationOpacity, {
+          toValue: 0,
+          duration: 180,
+          useNativeDriver: true,
+        }).start(() => resolve());
+      });
       setCameraActive(false);
       setSession(nextSession);
     } catch (error) {
       setStatusText(error instanceof Error ? error.message : 'No fue posible validar la credencial.');
+      await new Promise<void>((resolve) => {
+        Animated.timing(validationOpacity, {
+          toValue: 0,
+          duration: 180,
+          useNativeDriver: true,
+        }).start(() => resolve());
+      });
     } finally {
+      setIsValidating(false);
       setIsScanning(false);
     }
   };
@@ -280,6 +483,8 @@ export default function LoginScreen() {
           <MercadoLibreBadge />
         </View>
       </View>
+
+      {isValidating && <SessionValidationOverlay opacity={validationOpacity} />}
     </SafeAreaView>
   );
 }
@@ -579,84 +784,405 @@ const styles = StyleSheet.create({
     width: 74,
     height: 18,
   },
-  activeSessionContent: {
-    flex: 1,
+  validationOverlay: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingBottom: 64,
+    paddingHorizontal: 28,
+    backgroundColor: 'rgba(210, 237, 246, 0.92)',
   },
-  sessionIndicator: {
-    height: 27,
-    flexDirection: 'row',
+  validationCard: {
+    width: 268,
+    height: 268,
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 15,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255, 255, 255, 0.48)',
+    justifyContent: 'center',
+    paddingHorizontal: 30,
+    borderRadius: 134,
+    borderWidth: 2,
+    borderColor: 'rgba(36, 97, 201, 0.20)',
+    backgroundColor: colors.white,
+    boxShadow: '0px 18px 38px rgba(4, 16, 49, 0.20)',
   },
-  sessionIndicatorDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: '#2a9b68',
+  validationLogo: {
+    width: 172,
+    height: 58,
   },
-  sessionIndicatorText: {
-    color: '#126347',
-    fontSize: 11,
+  validationSpinner: {
+    marginTop: 18,
+  },
+  validationTitle: {
+    marginTop: 16,
+    color: colors.navyDeep,
+    fontSize: 17,
     fontWeight: '900',
-  },
-  activeTitle: {
-    marginTop: 24,
-    paddingHorizontal: 16,
-    color: '#0a3f70',
-    fontSize: 26,
-    fontWeight: '900',
-    lineHeight: 33,
+    lineHeight: 24,
     textAlign: 'center',
   },
-  activeSubtitle: {
-    marginTop: 10,
-    color: '#245b83',
-    fontSize: 15,
+  validationSubtitle: {
+    marginTop: 5,
+    color: '#3a607e',
+    fontSize: 13,
     fontWeight: '500',
-    lineHeight: 22,
+    lineHeight: 19,
     textAlign: 'center',
   },
-  roleList: {
+  workspaceSafeArea: {
+    flex: 1,
+    backgroundColor: '#d8eef8',
+  },
+  workspaceBackground: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: '#d8eef8',
+    experimental_backgroundImage:
+      'linear-gradient(180deg, #f8fbfd 0%, #e8f5fa 34%, #d2edf6 100%)',
+  },
+  workspaceScreen: {
+    flex: 1,
+    width: '100%',
+    maxWidth: 430,
+    alignSelf: 'center',
+  },
+  workspaceHeader: {
+    zIndex: 2,
+    height: 76,
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: 8,
-    marginTop: 28,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(36, 91, 131, 0.12)',
+    backgroundColor: 'rgba(255, 255, 255, 0.88)',
   },
-  roleBadge: {
-    minHeight: 31,
-    justifyContent: 'center',
-    paddingHorizontal: 14,
-    borderRadius: 16,
-    backgroundColor: 'rgba(34, 97, 201, 0.14)',
+  workspaceIdentity: {
+    minWidth: 0,
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 11,
   },
-  roleBadgeText: {
-    color: '#124d82',
-    fontSize: 12,
+  workspaceAvatar: {
+    width: 42,
+    height: 42,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 21,
+    borderWidth: 2,
+    borderColor: colors.yellow,
+    backgroundColor: colors.blueDeep,
+  },
+  workspaceAvatarText: {
+    color: colors.white,
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  workspaceTitle: {
+    color: colors.navyDeep,
+    fontSize: 17,
+    fontWeight: '900',
+    lineHeight: 21,
+  },
+  workspaceGreeting: {
+    maxWidth: 235,
+    marginTop: 1,
+    color: '#245b83',
+    fontSize: 13,
+    fontWeight: '500',
+    lineHeight: 18,
+  },
+  settingsButton: {
+    width: 42,
+    height: 42,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+    borderRadius: 21,
+  },
+  sessionMenu: {
+    position: 'absolute',
+    top: 67,
+    right: 18,
+    width: 220,
+    padding: 14,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(10, 63, 112, 0.14)',
+    backgroundColor: colors.white,
+    boxShadow: '0px 12px 26px rgba(4, 16, 49, 0.18)',
+  },
+  sessionMenuLabel: {
+    color: '#53728e',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0,
+    textTransform: 'uppercase',
+  },
+  sessionMenuName: {
+    marginTop: 3,
+    color: '#0a3f70',
+    fontSize: 14,
     fontWeight: '800',
   },
-  logoutButton: {
-    width: '100%',
-    maxWidth: 322,
-    height: 54,
+  sessionMenuLogout: {
+    height: 37,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 38,
+    gap: 7,
+    marginTop: 12,
+    borderRadius: 7,
+    backgroundColor: 'rgba(36, 97, 201, 0.12)',
+  },
+  sessionMenuLogoutText: {
+    color: '#0a3f70',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  workspaceContent: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 86,
+  },
+  scanCodeButton: {
+    height: 64,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 11,
+    borderRadius: 21,
+    backgroundColor: colors.blueDeep,
+    boxShadow: '0px 13px 26px rgba(10, 70, 186, 0.22)',
+  },
+  scanCodeButtonText: {
+    color: colors.white,
+    fontSize: 16,
+    fontWeight: '900',
+    letterSpacing: 0,
+  },
+  pickingFilters: {
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    marginTop: 15,
+    padding: 5,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: 'rgba(10, 63, 112, 0.22)',
-    backgroundColor: 'rgba(255, 255, 255, 0.50)',
+    borderColor: 'rgba(36, 91, 131, 0.15)',
+    backgroundColor: 'rgba(255, 255, 255, 0.56)',
   },
-  logoutButtonText: {
+  pickingFilter: {
+    minWidth: 67,
+    height: 31,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+    borderRadius: 16,
+  },
+  pickingFilterActive: {
+    backgroundColor: colors.yellow,
+  },
+  pickingFilterText: {
+    color: '#245b83',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  pickingFilterTextActive: {
+    color: colors.navyDeep,
+  },
+  progressCard: {
+    marginTop: 20,
+    padding: 20,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(10, 63, 112, 0.16)',
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
+    boxShadow: '0px 3px 5px rgba(7, 26, 67, 0.10)',
+  },
+  progressTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+  },
+  progressLabel: {
+    color: '#245b83',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0,
+  },
+  progressOrder: {
+    marginTop: 8,
+    color: colors.navyDeep,
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  progressCount: {
+    alignItems: 'flex-end',
+  },
+  progressCountNumber: {
+    color: colors.blueDeep,
+    fontSize: 21,
+    fontWeight: '900',
+  },
+  progressCountLabel: {
+    marginTop: 1,
+    color: '#53728e',
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 0,
+  },
+  progressTrack: {
+    height: 8,
+    overflow: 'hidden',
+    marginTop: 19,
+    borderRadius: 4,
+    backgroundColor: '#e4edf1',
+  },
+  progressValue: {
+    width: '67%',
+    height: '100%',
+    borderRadius: 4,
+    backgroundColor: colors.yellow,
+  },
+  workspaceSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 28,
+    paddingHorizontal: 3,
+  },
+  workspaceSectionTitle: {
+    color: '#245b83',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0,
+  },
+  pendingItemsList: {
+    gap: 10,
+    marginTop: 15,
+  },
+  pendingItem: {
+    minHeight: 93,
+    flexDirection: 'row',
+    alignItems: 'center',
+    overflow: 'hidden',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(10, 63, 112, 0.16)',
+    backgroundColor: 'rgba(255, 255, 255, 0.94)',
+    boxShadow: '0px 3px 5px rgba(7, 26, 67, 0.09)',
+  },
+  pendingItemAccent: {
+    width: 7,
+    alignSelf: 'stretch',
+    backgroundColor: colors.yellow,
+  },
+  pendingItemContent: {
+    flex: 1,
+    minWidth: 0,
+    paddingVertical: 13,
+    paddingLeft: 15,
+    paddingRight: 8,
+  },
+  pendingItemTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  binBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    color: colors.white,
+    fontSize: 10,
+    fontWeight: '900',
+    backgroundColor: colors.blueDeep,
+  },
+  itemQuantity: {
+    color: '#3678ef',
+    fontSize: 17,
+    fontWeight: '900',
+  },
+  itemSku: {
+    marginTop: 7,
+    color: colors.navyDeep,
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  itemName: {
+    marginTop: 4,
+    color: '#3a607e',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  priorityEnd: {
+    marginTop: 10,
+    color: '#53728e',
+    fontSize: 11,
+    fontStyle: 'italic',
+    textAlign: 'center',
+  },
+  emptyWorkspace: {
+    minHeight: 190,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 9,
+    marginTop: 15,
+    paddingHorizontal: 28,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(10, 63, 112, 0.14)',
+    backgroundColor: 'rgba(255, 255, 255, 0.70)',
+  },
+  emptyWorkspaceTitle: {
+    marginTop: 3,
     color: '#0a3f70',
     fontSize: 16,
-    fontWeight: '800',
+    fontWeight: '900',
+  },
+  emptyWorkspaceText: {
+    color: '#3a607e',
+    fontSize: 13,
+    fontWeight: '500',
+    lineHeight: 19,
+    textAlign: 'center',
+  },
+  workspaceTabs: {
+    position: 'absolute',
+    right: 0,
+    bottom: 0,
+    left: 0,
+    minHeight: 72,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    backgroundColor: colors.blueDeep,
+  },
+  workspaceTab: {
+    width: 108,
+    minHeight: 54,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+    paddingHorizontal: 5,
+    borderRadius: 18,
+  },
+  workspaceTabActive: {
+    backgroundColor: colors.yellow,
+  },
+  workspaceTabText: {
+    color: '#d9e3f7',
+    fontSize: 9,
+    fontWeight: '900',
+    lineHeight: 11,
+    textAlign: 'center',
+  },
+  workspaceTabTextActive: {
+    color: colors.navyDeep,
   },
   pressed: {
     opacity: 0.78,
